@@ -388,42 +388,22 @@ play_service(int s_wld)
 				exceptional = 1;
 				src = tp->srcfd;
 				dst = tp->dstfd;
-#if 0
-				switch (tp->port) {
-				default:
-					if (tcp_relay(src, dst, tp, exceptional) != 0)
-						continue;
-					break;
-				}
-#endif
-			}
-			if (FD_ISSET(tp->srcfd, &readfds)) {
-				src = tp->srcfd;
-				dst = tp->dstfd;
-				switch (tp->port) {
-				default:
-					if (tcp_relay(src, dst, tp, exceptional) != 0)
-						continue;
-					break;
-				}
 			}
 			if (FD_ISSET(tp->dstfd, &exceptfds)) {
 				fprintf(stderr, "f");
 				exceptional = 1;
 				src = tp->dstfd;
 				dst = tp->srcfd;
-#if 0
-				switch (tp->port) {
-				default:
-					if (tcp_relay(src, dst, tp, exceptional) != 0)
-						continue;
-					break;
-				}
-#endif
+			}
+			if (FD_ISSET(tp->srcfd, &readfds)) {
+				src = tp->srcfd;
+				dst = tp->dstfd;
 			}
 			if (FD_ISSET(tp->dstfd, &readfds)) {
 				src = tp->dstfd;
 				dst = tp->srcfd;
+			}
+			if (src || dst) {
 				switch (tp->port) {
 				default:
 					if (tcp_relay(src, dst, tp, exceptional) != 0)
