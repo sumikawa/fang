@@ -229,5 +229,6 @@ tcp_relay(int s_rcv, int s_snd, struct transtab *tp, int exceptional)
 	}
 	if (FD_ISSET(s_snd, &writefds))
 		send_data(s_rcv, s_snd, tp);
+	tp->lastactive = time(NULL);
 	return(0);
 }

@@ -107,7 +107,7 @@ static char *configfile = NULL;
 
 int main __P((int, char **));
 static void play_service __P((int));
-static void play_child __P((int, struct sockaddr *));
+static void accept_session __P((int, struct sockaddr *));
 static int faith_prefix __P((struct sockaddr *));
 static int map6to4 __P((struct sockaddr_in6 *, struct sockaddr_in *));
 #ifdef FAITH4
@@ -374,7 +374,7 @@ play_service(int s_wld)
 			exit_failure("socket: %s", strerror(errno));
 			/* xxx: should be fixed */
 		}
-		play_child(s_src, (struct sockaddr *)&srcaddr);
+		accept_session(s_src, (struct sockaddr *)&srcaddr);
 	}
 
 	next = NULL;
@@ -413,11 +413,27 @@ play_service(int s_wld)
 			}
 		}
 	}
+
+	next = NULL;
+	for (tp = transtab; tp != NULL; tp = next) {
+		/* Garbage collection */
+		next = tp->next;
+		if (!tp->active) {
+			fprintf(stderr, "garbage collection\n");
+			if (tp->next)
+				tp->next->prev = tp->prev;
+			if (tp->prev)
+				tp->prev->next = tp->next;
+			else
+				transtab = tp->next;
+			free(tp);
+		}
+	}
 	goto again;
 }
 
 static void
-play_child(int s_src, struct sockaddr *srcaddr)
+accept_session(int s_src, struct sockaddr *srcaddr)
 {
 	struct sockaddr_storage dstaddr6;
 	struct sockaddr_storage dstaddr4;
@@ -593,7 +609,7 @@ play_child(int s_src, struct sockaddr *srcaddr)
 		/*NOTREACHED*/
 	}
 #endif
-	/* NOTREACHED */
+	return;
 }
 
 /* 0: non faith, 1: faith */

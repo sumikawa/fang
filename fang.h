@@ -71,6 +71,7 @@ struct transtab {
 	u_short port;
 	int idle;
 	int active;
+	time_t lastactive;
 };
 extern struct transtab *transtab;
 extern fd_set readfds, writefds, exceptfds;
