@@ -306,11 +306,7 @@ play_service(int s_wld)
 	int maxfd;
 	struct timeval tv;
 	struct transtab *tp, *next;
-
-	/*
-	 * Wait, accept, fork, faith....
-	 */
-	setproctitle("%s", procname);
+	time_t t, last = time(NULL);
 
 	oreadfds = readfds; owritefds = writefds; oexceptfds = exceptfds;
  again:
@@ -358,7 +354,7 @@ play_service(int s_wld)
 		/*NOTREACHED*/
 	}
 	if (error == 0)
-		goto again; /* time out */
+		goto gc;
 
 #ifdef USE_ROUTE
 	if (FD_ISSET(sockfd, &readfds)) {
@@ -396,10 +392,12 @@ play_service(int s_wld)
 				dst = tp->srcfd;
 			}
 			if (FD_ISSET(tp->srcfd, &readfds)) {
+				fprintf(stderr, "l");
 				src = tp->srcfd;
 				dst = tp->dstfd;
 			}
 			if (FD_ISSET(tp->dstfd, &readfds)) {
+				fprintf(stderr, "r");
 				src = tp->dstfd;
 				dst = tp->srcfd;
 			}
@@ -414,10 +412,30 @@ play_service(int s_wld)
 		}
 	}
 
+ gc:
+	t = time(NULL);
+	if (t - last < FAITH_TIMEOUT / 4)
+		goto again;
+	last = t;
 	next = NULL;
 	for (tp = transtab; tp != NULL; tp = next) {
-		/* Garbage collection */
 		next = tp->next;
+		/* timeout */
+		if (tp->active && (FAITH_TIMEOUT < t - tp->lastactive)) {
+			fprintf(stderr, "timeout\n");
+			/* to close opposite-direction relay process */
+			shutdown(tp->dstfd, 0);
+			close(tp->dstfd);
+			close(tp->srcfd);
+			if (tp->next)
+				tp->next->prev = tp->prev;
+			if (tp->prev)
+				tp->prev->next = tp->next;
+			else
+				transtab = tp->next;
+			free(tp);
+		}
+		/* Garbage collection. no neceddary at this moment */
 		if (!tp->active) {
 			fprintf(stderr, "garbage collection\n");
 			if (tp->next)
@@ -560,6 +578,7 @@ accept_session(int s_src, struct sockaddr *srcaddr)
 	memcpy(&new->srcaddr, srcaddr, sizeof(struct sockaddr_storage));
 	new->srcfd = s_src;
 	memcpy(&new->dstaddr, &dstaddr4, sizeof(struct sockaddr_storage));
+	new->lastactive = time(NULL);
 	if (sa4->sa_family == AF_INET6)
 		new->port = ntohs(((struct sockaddr_in6 *)&dstaddr4)->sin6_port);
 	else /* AF_INET */
