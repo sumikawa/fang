@@ -387,7 +387,7 @@ play_service(int s_wld)
 #if 0
 				switch (tp->port) {
 				default:
-					if (tcp_relay(tp->srcfd, tp->dstfd, tp) != 0)
+					if (tcp_relay(tp->srcfd, tp->dstfd, tp, 1) != 0)
 						continue;
 					break;
 				}
@@ -396,7 +396,7 @@ play_service(int s_wld)
 			if (FD_ISSET(tp->srcfd, &readfds)) {
 				switch (tp->port) {
 				default:
-					if (tcp_relay(tp->srcfd, tp->dstfd, tp) != 0)
+					if (tcp_relay(tp->srcfd, tp->dstfd, tp, 0) != 0)
 						continue;
 					break;
 				}
@@ -406,7 +406,7 @@ play_service(int s_wld)
 #if 0
 				switch (tp->port) {
 				default:
-					if (tcp_relay(tp->dstfd, tp->srcfd, tp) != 0)
+					if (tcp_relay(tp->dstfd, tp->srcfd, tp, 1) != 0)
 						continue;
 					break;
 				}
@@ -415,7 +415,7 @@ play_service(int s_wld)
 			if (FD_ISSET(tp->dstfd, &readfds)) {
 				switch (tp->port) {
 				default:
-					if (tcp_relay(tp->dstfd, tp->srcfd, tp) != 0)
+					if (tcp_relay(tp->dstfd, tp->srcfd, tp, 0) != 0)
 						continue;
 					break;
 				}
