@@ -68,13 +68,14 @@ struct transtab {
 	struct sockaddr_storage dstaddr;
 	int srcfd;
 	int dstfd;
+	u_short port;
 	int idle;
 	int active;
 };
 extern struct transtab *transtab;
 extern fd_set readfds, writefds, exceptfds;
 
-extern void tcp_relay __P((int, int, struct transtab *));
+extern int tcp_relay __P((int, int, struct transtab *));
 extern void ftp_relay __P((int, int));
 extern int ftp_active __P((int, int, int *, int *));
 extern int ftp_passive __P((int, int, int *, int *));

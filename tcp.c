@@ -208,12 +208,8 @@ tcp_relay(int s_rcv, int s_snd, struct transtab *tp)
 		close(s_rcv);
 		close(s_snd);
 #if 0
-		FD_CLR(s_rcv, &readfds);
-		FD_CLR(s_snd, &readfds);
-		FD_CLR(s_rcv, &exceptfds);
-		FD_CLR(s_snd, &exceptfds);
-#endif
 		fprintf(stderr, "inactive\n");
+#endif
 		if (tp->next)
 			tp->next->prev = tp->prev;
 		if (tp->prev)
@@ -221,13 +217,16 @@ tcp_relay(int s_rcv, int s_snd, struct transtab *tp)
 		else
 			transtab = tp->next;
 		free(tp);
-		return;
+		return (-1);
 	default:
+#if 0
 		fprintf(stderr, " tblen=%d\n", tblen);
+#endif
 		FD_CLR(s_rcv, &readfds);
 		FD_SET(s_snd, &writefds);
 		break;
 	}
 	if (FD_ISSET(s_snd, &writefds))
 		send_data(s_rcv, s_snd, tp);
+	return(0);
 }

@@ -324,8 +324,10 @@ play_service(int s_wld)
 	FD_SET(s_wld, &readfds);
 	for (tp = transtab; tp != NULL; tp = tp->next) {
 		if (tp->active) {
+#if 0
 			fprintf(stderr, "fd_set: srcfd=%d, dstfd=%d\n", tp->srcfd,
 				tp->dstfd);
+#endif
 			FD_SET(tp->srcfd, &readfds);
 			FD_SET(tp->srcfd, &exceptfds);
 			FD_SET(tp->dstfd, &readfds);
@@ -345,8 +347,10 @@ play_service(int s_wld)
 	}
 #endif
 
+#if 0
 	fprintf(stderr, "select readfds = %o\n", readfds);
 	fflush(stderr);
+#endif
 	error = select(maxfd + 1, &readfds, &writefds, &exceptfds, &tv);
 	if (error < 0) {
 		if (errno == EINTR)
@@ -354,8 +358,10 @@ play_service(int s_wld)
 		exit_failure("select: %s", strerror(errno));
 		/*NOTREACHED*/
 	}
-	if (error == 0)
+	if (error == 0) {
+		fprintf(stderr, "s");
 		goto again; /* time out */
+	}
 
 #ifdef USE_ROUTE
 	if (FD_ISSET(sockfd, &readfds)) {
@@ -387,7 +393,7 @@ play_service(int s_wld)
 				switch (tp->port) {
 				default:
 					if (tcp_relay(tp->srcfd, tp->dstfd, tp) != 0)
-						continue
+						continue;
 					break;
 				}
 #endif
