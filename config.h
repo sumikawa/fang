@@ -43,7 +43,7 @@ struct config {
 	struct prefix src;	/* src to use for outgoing connection */
 };
 
-#define _PATH_PREFIX_CONF	"/etc/faithd.conf"
+#define _PATH_PREFIX_CONF	"/etc/fang.conf"
 
 extern const char *prefix_string __P((const struct prefix *));
 extern int prefix_match __P((const struct prefix *, const struct sockaddr *));

@@ -68,3 +68,18 @@ extern void exit_failure __P((const char *, ...))
 #define UC(b)	(((int)b)&0xff)
 
 #define FAITH_TIMEOUT	(30 * 60)	/*second*/
+
+#define LISTEN_QUEUE	5
+#define MAX_CONNECTION	256
+
+struct transtab {
+	struct transtab *next;
+	struct sockaddr_storage srcaddr;
+	struct sockaddr_storage dstaddr;
+	int srcfd;
+	int dstfd;
+	int idle;
+	int active;
+};
+extern struct transtab *transtab;
+extern fd_set readfds, writefds, exceptfds;

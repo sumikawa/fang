@@ -65,7 +65,7 @@ static void sig_ctimeout __P((int));
 static void sig_child __P((int));
 static void notify_inactive __P((void));
 static void notify_active __P((void));
-static void send_data __P((int, int, const char *, int));
+static void send_data __P((int, int, const char *));
 static void relay __P((int, int, const char *, int));
 
 /*
@@ -145,7 +145,7 @@ notify_active()
 }
 
 static void
-send_data(int s_rcv, int s_snd, const char *service, int direction)
+send_data(int s_rcv, int s_snd, const char *service)
 {
 	int cc;
 
@@ -167,8 +167,7 @@ send_data(int s_rcv, int s_snd, const char *service, int direction)
 		if (tblen >= sizeof(tcpbuf))
 			tblen = sizeof(tcpbuf) - 1;
 	    	tcpbuf[tblen] = '\0';
-		syslog(LOG_DEBUG, "from %s (%dbytes): %s",
-		       direction == 1 ? "client" : "server", tblen, tcpbuf);
+		syslog(LOG_DEBUG, "from %s (%dbytes): %s", tblen, tcpbuf);
 	}
 #endif /* DEBUG */
 	tblen = 0; tboff = 0;
@@ -181,122 +180,55 @@ send_data(int s_rcv, int s_snd, const char *service, int direction)
 	FD_SET(s_snd, &writefds);
 }
 
-static void
-relay(int s_rcv, int s_snd, const char *service, int direction)
+void
+tcp_relay(int s_rcv, int s_snd, const char *service)
 {
 	int atmark, error, maxfd;
-	struct timeval tv;
-	fd_set oreadfds, owritefds, oexceptfds;
 
-	FD_ZERO(&readfds);
-	FD_ZERO(&writefds);
-	FD_ZERO(&exceptfds);
-	fcntl(s_snd, F_SETFD, O_NONBLOCK);
-	oreadfds = readfds; owritefds = writefds; oexceptfds = exceptfds;
-	FD_SET(s_rcv, &readfds);
-	FD_SET(s_rcv, &exceptfds);
-	oob_exists = 0;
-	maxfd = (s_rcv > s_snd) ? s_rcv : s_snd;
-
-	for (;;) {
-		tv.tv_sec = FAITH_TIMEOUT / 4;
-		tv.tv_usec = 0;
-		oreadfds = readfds;
-		owritefds = writefds;
-		oexceptfds = exceptfds;
-		error = select(maxfd + 1, &readfds, &writefds, &exceptfds, &tv);
-		if (error == -1) {
-			if (errno == EINTR)
-				continue;
-			exit_failure("select: %s", strerror(errno));
-		} else if (error == 0) {
-			readfds = oreadfds;
-			writefds = owritefds;
-			exceptfds = oexceptfds;
-			notify_inactive();
-			continue;
-		}
-
-		/* activity notification */
-		notify_active();
-
-		if (FD_ISSET(s_rcv, &exceptfds)) {
-			error = ioctl(s_rcv, SIOCATMARK, &atmark);
-			if (error != -1 && atmark == 1) {
-				int cc;
-			    oob_read_retry:
-				cc = read(s_rcv, atmark_buf, 1);
-				if (cc == 1) {
-					FD_CLR(s_rcv, &exceptfds);
-					FD_SET(s_snd, &writefds);
-					oob_exists = 1;
-				} else if (cc == -1) {
-					if (errno == EINTR)
-						goto oob_read_retry;
-					exit_failure("reading oob data failed"
-						     ": %s",
-						     strerror(errno));
-				}
-			}
-		}
-		if (FD_ISSET(s_rcv, &readfds)) {
-		    relaydata_read_retry:
-			tblen = read(s_rcv, tcpbuf, sizeof(tcpbuf));
-			tboff = 0;
-
-			switch (tblen) {
-			case -1:
-				if (errno == EINTR)
-					goto relaydata_read_retry;
-				exit_failure("reading relay data failed: %s",
-					     strerror(errno));
-				/* NOTREACHED */
-			case 0:
-				/* to close opposite-direction relay process */
-				shutdown(s_snd, 0);
-
-				close(s_rcv);
-				close(s_snd);
-				exit_success("terminating %s relay", service);
-				/* NOTREACHED */
-			default:
-				FD_CLR(s_rcv, &readfds);
+	if (FD_ISSET(s_rcv, &exceptfds)) {
+		error = ioctl(s_rcv, SIOCATMARK, &atmark);
+		if (error != -1 && atmark == 1) {
+			int cc;
+		oob_read_retry:
+			cc = read(s_rcv, atmark_buf, 1);
+			if (cc == 1) {
+				FD_CLR(s_rcv, &exceptfds);
 				FD_SET(s_snd, &writefds);
-				break;
+				oob_exists = 1;
+			} else if (cc == -1) {
+				if (errno == EINTR)
+					goto oob_read_retry;
+				exit_failure("reading oob data failed"
+					     ": %s",
+					     strerror(errno));
 			}
 		}
-		if (FD_ISSET(s_snd, &writefds))
-			send_data(s_rcv, s_snd, service, direction);
 	}
-}
+	if (FD_ISSET(s_rcv, &readfds)) {
+	relaydata_read_retry:
+		tblen = read(s_rcv, tcpbuf, sizeof(tcpbuf));
+		tboff = 0;
+		switch (tblen) {
+		case -1:
+			if (errno == EINTR)
+				goto relaydata_read_retry;
+			exit_failure("reading relay data failed: %s",
+				     strerror(errno));
+			/* NOTREACHED */
+		case 0:
+			/* to close opposite-direction relay process */
+			shutdown(s_snd, 0);
 
-void
-tcp_relay(int s_src, int s_dst, const char *service)
-{
-	syslog(LOG_INFO, "starting %s relay", service);
-
-	child_lastactive = parent_lastactive = time(NULL);
-
-	cpid = fork();
-	switch (cpid) {
-	case -1:
-		exit_failure("tcp_relay: can't fork grand child: %s",
-		    strerror(errno));
-		/* NOTREACHED */
-	case 0:
-		/* child process: relay going traffic */
-		ppid = getppid();
-		/* this is child so reopen log */
-		closelog();
-		openlog(logname, LOG_PID | LOG_NOWAIT, LOG_DAEMON);
-		relay(s_src, s_dst, service, 1);
-		/* NOTREACHED */
-	default:
-		/* parent process: relay coming traffic */
-		ppid = (pid_t)0;
-		signal(SIGUSR1, sig_ctimeout);
-		signal(SIGCHLD, sig_child);
-		relay(s_dst, s_src, service, 0);
-		/* NOTREACHED */
+			close(s_rcv);
+			close(s_snd);
+			exit_success("terminating %s relay", service);
+			/* NOTREACHED */
+		default:
+			FD_CLR(s_rcv, &readfds);
+			FD_SET(s_snd, &writefds);
+			break;
+		}
 	}
+	if (FD_ISSET(s_snd, &writefds))
+		send_data(s_rcv, s_snd, service);
 }

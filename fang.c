@@ -98,6 +98,9 @@ static const char *service;
 static int sockfd = 0;
 #endif
 int dflag = 0;
+struct transtab *transtab = NULL;
+fd_set readfds, writefds, exceptfds;
+
 static int pflag = 0;
 static int inetd = 0;
 static char *configfile = NULL;
@@ -259,9 +262,11 @@ main(int argc, char **argv)
 	if (error == -1)
 		exit_stderr("bind: %s", strerror(errno));
 
-	error = listen(s_wld, 5);
+	error = listen(s_wld, LISTEN_QUEUE);
 	if (error == -1)
 		exit_stderr("listen: %s", strerror(errno));
+	if (fcntl(s_wld, F_SETFL, O_NONBLOCK) == -1)
+		exit_stderr("fcntl: %s", strerror(errno));;
 
 #ifdef USE_ROUTE
 	sockfd = socket(PF_ROUTE, SOCK_RAW, PF_UNSPEC);
@@ -275,8 +280,9 @@ main(int argc, char **argv)
 	 * Everything is OK.
 	 */
 
+#if 0
 	start_daemon();
-
+#endif
 	snprintf(logname, sizeof(logname), "faithd %s", service);
 	snprintf(procname, sizeof(procname), "accepting port %s", service);
 	openlog(logname, LOG_PID | LOG_NOWAIT, LOG_DAEMON);
@@ -294,63 +300,102 @@ play_service(int s_wld)
 	int len;
 	int s_src;
 	pid_t child_pid;
-	fd_set rfds;
+	fd_set oreadfds, owritefds, oexceptfds;
 	int error;
 	int maxfd;
+	struct timeval tv;
+	struct transtab *tp;
 
 	/*
 	 * Wait, accept, fork, faith....
 	 */
-again:
 	setproctitle("%s", procname);
 
-	FD_ZERO(&rfds);
-	FD_SET(s_wld, &rfds);
-	maxfd = s_wld;
+	FD_ZERO(&readfds);
+	FD_ZERO(&writefds);
+	FD_ZERO(&exceptfds);
+	oreadfds = readfds; owritefds = writefds; oexceptfds = exceptfds;
+ again:
+	tv.tv_sec = 1; /* one second */
+	tv.tv_usec = 0;
+
+	FD_SET(s_wld, &readfds);
+	for (tp = transtab; tp != NULL; tp = tp->next) {
+		if (tp->active) {
+			FD_SET(tp->srcfd, &readfds);
+			FD_SET(tp->srcfd, &exceptfds);
+		}
+	}
+	maxfd = getdtablesize();
+	if (maxfd > FD_SETSIZE)
+		maxfd = FD_SETSIZE;
+	
 #ifdef USE_ROUTE
 	if (sockfd) {
-		FD_SET(sockfd, &rfds);
+		FD_SET(sockfd, &readfds);
+#if 0
 		maxfd = (maxfd < sockfd) ? sockfd : maxfd;
+#endif
 	}
 #endif
 
-	error = select(maxfd + 1, &rfds, NULL, NULL, NULL);
+	error = select(maxfd + 1, &readfds, NULL, &exceptfds, &tv);
 	if (error < 0) {
 		if (errno == EINTR)
 			goto again;
 		exit_failure("select: %s", strerror(errno));
 		/*NOTREACHED*/
 	}
+	if (error == 0)
+		goto again; /* time out */
 
 #ifdef USE_ROUTE
-	if (FD_ISSET(sockfd, &rfds)) {
+	if (FD_ISSET(sockfd, &readfds)) {
 		update_myaddrs();
 	}
 #endif
-	if (FD_ISSET(s_wld, &rfds)) {
+	if (FD_ISSET(s_wld, &readfds)) {
+		int i;
+
+		/* xxx: should do accept() repeat until queue is null? */
 		len = sizeof(srcaddr);
 		s_src = accept(s_wld, (struct sockaddr *)&srcaddr,
-			&len);
+			       &len);
 		if (s_src == -1) {
 			exit_failure("socket: %s", strerror(errno));
-			/*NOTREACHED*/
+			/* xxx: should be fixed */
 		}
+		play_child(s_src, (struct sockaddr *)&srcaddr);
+	}
 
-		child_pid = fork();
-		
-		if (child_pid == 0) {
-			/* child process */
-			close(s_wld);
-			closelog();
-			openlog(logname, LOG_PID | LOG_NOWAIT, LOG_DAEMON);
-			play_child(s_src, (struct sockaddr *)&srcaddr);
-			exit_failure("should never reach here");
-			/*NOTREACHED*/
-		} else {
-			/* parent process */
-			close(s_src);
-			if (child_pid == -1)
-				syslog(LOG_ERR, "can't fork");
+	for (tp = transtab; tp != NULL; tp = tp->next) {
+		if (tp->active) {
+			/* xxx rotate */
+			if (FD_ISSET(tp->srcfd, &readfds) ||
+			    FD_ISSET(tp->dstfd, &readfds)) {
+				switch (100) {
+#if 0
+				case FTP_PORT:
+					ftp_relay(s_src, s_dst);
+					break;
+				case RSH_PORT:
+					syslog(LOG_WARNING,
+					       "WARINNG: it is insecure to relay rsh port");
+					rsh_relay(s_src, s_dst);
+					break;
+				case RLOGIN_PORT:
+					syslog(LOG_WARNING,
+					       "WARINNG: it is insecure to relay rlogin port");
+					/*FALLTHROUGH*/
+#endif
+				default:
+					tcp_relay(tp->srcfd, tp->dstfd, service);
+					break;
+				}
+#if 0
+				FD_SET(tp->srcfd, &exceptfds);
+#endif
+			}
 		}
 	}
 	goto again;
@@ -361,17 +406,16 @@ play_child(int s_src, struct sockaddr *srcaddr)
 {
 	struct sockaddr_storage dstaddr6;
 	struct sockaddr_storage dstaddr4;
-	char src[MAXHOSTNAMELEN];
-	char dst6[MAXHOSTNAMELEN];
-	char dst4[MAXHOSTNAMELEN];
+	char src[NI_MAXHOST];
+	char dst6[NI_MAXHOST];
+	char dst4[NI_MAXHOST];
+	char dport[NI_MAXSERV];
 	int len = sizeof(dstaddr6);
 	int s_dst, error, hport, nresvport, on = 1;
 	struct timeval tv;
 	struct sockaddr *sa4;
 	const struct config *conf;
-	
-	tv.tv_sec = 1;
-	tv.tv_usec = 0;
+	struct transtab *new;
 
 	getnameinfo(srcaddr, srcaddr->sa_len,
 		src, sizeof(src), NULL, 0, NI_NUMERICHOST);
@@ -382,10 +426,9 @@ play_child(int s_src, struct sockaddr *srcaddr)
 		exit_failure("getsockname: %s", strerror(errno));
 		/*NOTREACHED*/
 	}
-
-	getnameinfo((struct sockaddr *)&dstaddr6, len,
-		dst6, sizeof(dst6), NULL, 0, NI_NUMERICHOST);
-	syslog(LOG_INFO, "the client is connecting to %s", dst6);
+	getnameinfo((struct sockaddr *)&dstaddr6, len, dst6, sizeof(dst6),
+		    dport, sizeof(dport), NI_NUMERICHOST | NI_NUMERICSERV);
+	syslog(LOG_INFO, "the client is connecting to %s:%s", dst6, dport);
 	
 	if (!faith_prefix((struct sockaddr *)&dstaddr6)) {
 		if (serverpath) {
@@ -393,6 +436,23 @@ play_child(int s_src, struct sockaddr *srcaddr)
 			 * Local service
 			 */
 			syslog(LOG_INFO, "executing local %s", serverpath);
+#if 0
+			child_pid = fork();
+			if (child_pid == 0) {
+				/* child process */
+				close(s_wld);
+				closelog();
+				openlog(logname, LOG_PID | LOG_NOWAIT, LOG_DAEMON);
+				play_child(s_src, (struct sockaddr *)&srcaddr);
+				exit_failure("should never reach here");
+				/*NOTREACHED*/
+			} else {
+				/* parent process */
+				close(s_src);
+				if (child_pid == -1)
+					syslog(LOG_ERR, "can't fork");
+			}
+#endif
 			if (!inetd) {
 				dup2(s_src, 0);
 				close(s_src);
@@ -459,7 +519,14 @@ play_child(int s_src, struct sockaddr *srcaddr)
 
 	syslog(LOG_INFO, "the translator is connecting to %s", dst4);
 
-	setproctitle("port %s, %s -> %s", service, src, dst4);
+	/* create new tab */
+	new = (struct transtab *)malloc(sizeof(struct transtab));
+	memset(new, 0, sizeof(*new));
+	new->next = transtab;
+	transtab = new;
+	memcpy(srcaddr, &new->srcaddr, sizeof(struct sockaddr_storage));
+	new->srcfd = s_src;
+	memcpy(&dstaddr4, &new->dstaddr, sizeof(struct sockaddr_storage));
 
 	if (sa4->sa_family == AF_INET6)
 		hport = ntohs(((struct sockaddr_in6 *)&dstaddr4)->sin6_port);
@@ -482,6 +549,7 @@ play_child(int s_src, struct sockaddr *srcaddr)
 		exit_failure("socket: %s", strerror(errno));
 		/*NOTREACHED*/
 	}
+	new->dstfd = s_dst;
 
 	if (conf->src.a.ss_family) {
 		if (bind(s_dst, (const struct sockaddr *)&conf->src.a,
@@ -507,31 +575,16 @@ play_child(int s_src, struct sockaddr *srcaddr)
 		exit_failure("setsockopt(SO_SNDTIMEO): %s", strerror(errno));
 		/*NOTREACHED*/
 	}
+	if (fcntl(s_dst, F_SETFL, O_NONBLOCK) == -1)
+		exit_stderr("fcntl: %s", strerror(errno));;
+	if (fcntl(s_src, F_SETFL, O_NONBLOCK) == -1)
+		exit_stderr("fcntl: %s", strerror(errno));;
 
 	error = connect(s_dst, sa4, sa4->sa_len);
 	if (error < 0) {
 		exit_failure("connect: %s", strerror(errno));
 		/*NOTREACHED*/
 	}
-
-	switch (hport) {
-	case FTP_PORT:
-		ftp_relay(s_src, s_dst);
-		break;
-	case RSH_PORT:
-		syslog(LOG_WARNING,
-		    "WARINNG: it is insecure to relay rsh port");
-		rsh_relay(s_src, s_dst);
-		break;
-	case RLOGIN_PORT:
-		syslog(LOG_WARNING,
-		    "WARINNG: it is insecure to relay rlogin port");
-		/*FALLTHROUGH*/
-	default:
-		tcp_relay(s_src, s_dst, service);
-		break;
-	}
-
 	/* NOTREACHED */
 }
 

@@ -18,7 +18,8 @@
 
 BINDIR=	${PREFIX}/sbin
 PROG=	fang
-SRCS=	fang.c tcp.c ftp.c rsh.c prefix.c
+SRCS=	fang.c tcp.c prefix.c
+#SRCS=	fang.c tcp.c ftp.c rsh.c prefix.c
 
 #CFLAGS+= -DFAITH4
 
