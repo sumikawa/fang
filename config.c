@@ -43,7 +43,7 @@
 #define	offsetof(type, member)	((size_t)(u_long)(&((type *)0)->member))
 #endif
 
-#include "faithd.h"
+#include "fang.h"
 #include "prefix.h"
 
 static int prefix_set __P((const char *, struct prefix *, int));

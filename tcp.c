@@ -49,7 +49,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#include "faithd.h"
+#include "fang.h"
 
 static char tcpbuf[16*1024];
 	/* bigger than MSS and may be lesser than window size */

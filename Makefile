@@ -17,14 +17,14 @@
 .endif
 
 BINDIR=	${PREFIX}/sbin
-PROG=	faithd
-SRCS=	faithd.c tcp.c ftp.c rsh.c prefix.c
+PROG=	fang
+SRCS=	fang.c tcp.c ftp.c rsh.c prefix.c
 
 #CFLAGS+= -DFAITH4
 
-.if (${OPSYS} != "NetBSD")
-CFLAGS+= -Wall
-.endif
+#.if (${OPSYS} != "NetBSD")
+#CFLAGS+= -Wall
+#.endif
 LDADD+=	-lutil
 DPADD+=	${LIBUTIL}
 .if exists(/usr/local/v6/lib/libinet6.a)
@@ -34,10 +34,10 @@ DPADD+= ${.OBJDIR}/../libinet6/libinet6.a \
 	${.OBJDIR}/../libinet6/obj/libinet6.a \
 	/usr/local/v6/lib/libinet6.a
 .endif
-.if (${OPSYS} != "NetBSD")
-MAN8=	faithd.8
-.else
-MAN=	faithd.8
-.endif
+#.if (${OPSYS} != "NetBSD")
+#MAN8=	fang.8
+#.else
+MAN=	fang.8
+#.endif
 
 .include <bsd.prog.mk>

@@ -80,7 +80,7 @@
 #endif
 #endif
 
-#include "faithd.h"
+#include "fang.h"
 #include "prefix.h"
 
 char *serverpath = NULL;
@@ -103,8 +103,6 @@ static int inetd = 0;
 static char *configfile = NULL;
 
 int main __P((int, char **));
-static int inetd_main __P((int, char **));
-static int daemon_main __P((int, char **));
 static void play_service __P((int));
 static void play_child __P((int, struct sockaddr *));
 static int faith_prefix __P((struct sockaddr *));
@@ -124,103 +122,6 @@ static void usage __P((void));
 
 int
 main(int argc, char **argv)
-{
-
-	/*
-	 * Initializing stuff
-	 */
-
-	faithdname = strrchr(argv[0], '/');
-	if (faithdname)
-		faithdname++;
-	else
-		faithdname = argv[0];
-
-	if (strcmp(faithdname, "faithd") != 0) {
-		inetd = 1;
-		return inetd_main(argc, argv);
-	} else
-		return daemon_main(argc, argv);
-}
-
-static int
-inetd_main(int argc, char **argv)
-{
-	char path[MAXPATHLEN];
-	struct sockaddr_storage me;
-	struct sockaddr_storage from;
-	int melen, fromlen;
-	int i;
-	int error;
-	const int on = 1;
-	char sbuf[NI_MAXSERV], snum[NI_MAXSERV];
-
-	if (config_load(configfile) < 0 && configfile) {
-		exit_failure("could not load config file");
-		/*NOTREACHED*/
-	}
-
-	if (strrchr(argv[0], '/') == NULL)
-		snprintf(path, sizeof(path), "%s/%s", DEFAULT_DIR, argv[0]);
-	else
-		snprintf(path, sizeof(path), "%s", argv[0]);
-
-#ifdef USE_ROUTE
-	grab_myaddrs();
-
-	sockfd = socket(PF_ROUTE, SOCK_RAW, PF_UNSPEC);
-	if (sockfd < 0) {
-		exit_failure("socket(PF_ROUTE): %s", strerror(errno));
-		/*NOTREACHED*/
-	}
-#endif
-
-	melen = sizeof(me);
-	if (getsockname(STDIN_FILENO, (struct sockaddr *)&me, &melen) < 0) {
-		exit_failure("getsockname: %s", strerror(errno));
-		/*NOTREACHED*/
-	}
-	fromlen = sizeof(from);
-	if (getpeername(STDIN_FILENO, (struct sockaddr *)&from, &fromlen) < 0) {
-		exit_failure("getpeername: %s", strerror(errno));
-		/*NOTREACHED*/
-	}
-	if (getnameinfo((struct sockaddr *)&me, melen, NULL, 0,
-	    sbuf, sizeof(sbuf), NI_NUMERICHOST) == 0)
-		service = sbuf;
-	else
-		service = DEFAULT_PORT_NAME;
-	if (getnameinfo((struct sockaddr *)&me, melen, NULL, 0,
-	    snum, sizeof(snum), NI_NUMERICHOST) != 0)
-		snprintf(snum, sizeof(snum), "?");
-
-	snprintf(logname, sizeof(logname), "faithd %s", snum);
-	snprintf(procname, sizeof(procname), "accepting port %s", snum);
-	openlog(logname, LOG_PID | LOG_NOWAIT, LOG_DAEMON);
-
-	if (argc >= MAXARGV) {
-		exit_failure("too many arguments");
-		/*NOTREACHED*/
-	}
-	serverarg[0] = serverpath = path;
-	for (i = 1; i < argc; i++)
-		serverarg[i] = argv[i];
-	serverarg[i] = NULL;
-
-	error = setsockopt(STDIN_FILENO, SOL_SOCKET, SO_OOBINLINE, &on,
-	    sizeof(on));
-	if (error < 0) {
-		exit_failure("setsockopt(SO_OOBINLINE): %s", strerror(errno));
-		/*NOTREACHED*/
-	}
-
-	play_child(STDIN_FILENO, (struct sockaddr *)&from);
-	exit_failure("should not reach here");
-	return 0;	/*dummy!*/
-}
-
-static int
-daemon_main(int argc, char **argv)
 {
 	struct addrinfo hints, *res;
 	int s_wld, error, i, serverargc, on = 1;

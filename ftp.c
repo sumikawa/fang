@@ -47,7 +47,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#include "faithd.h"
+#include "fang.h"
 
 static char rbuf[MSS];
 static char sbuf[MSS];
