@@ -322,6 +322,10 @@ play_service(int s_wld)
 	FD_SET(s_wld, &readfds);
 	for (tp = transtab; tp != NULL; tp = tp->next) {
 		if (tp->active) {
+#if 0
+			fprintf(stderr, "fd_set: srcfd=%d, dstfd=%d\n", tp->srcfd,
+				tp->dstfd);
+#endif
 			FD_SET(tp->srcfd, &readfds);
 			FD_SET(tp->srcfd, &exceptfds);
 			FD_SET(tp->dstfd, &readfds);
@@ -341,7 +345,7 @@ play_service(int s_wld)
 	}
 #endif
 
-	error = select(maxfd + 1, &readfds, NULL, &exceptfds, &tv);
+	error = select(maxfd + 1, &readfds, &writefds, &exceptfds, &tv);
 	if (error < 0) {
 		if (errno == EINTR)
 			goto again;
@@ -372,26 +376,23 @@ play_service(int s_wld)
 
 	for (tp = transtab; tp != NULL; tp = tp->next) {
 		if (tp->active) {
-			/* xxx rotate */
-			if (FD_ISSET(tp->srcfd, &readfds) ||
-			    FD_ISSET(tp->dstfd, &readfds)) {
+			/* xxx TODO: fairness */
+			if (FD_ISSET(tp->srcfd, &readfds)) {
+				fprintf(stderr, "g");
 				switch (100) {
-#if 0
-				case FTP_PORT:
-					ftp_relay(s_src, s_dst);
-					break;
-				case RSH_PORT:
-					syslog(LOG_WARNING,
-					       "WARINNG: it is insecure to relay rsh port");
-					rsh_relay(s_src, s_dst);
-					break;
-				case RLOGIN_PORT:
-					syslog(LOG_WARNING,
-					       "WARINNG: it is insecure to relay rlogin port");
-					/*FALLTHROUGH*/
-#endif
 				default:
 					tcp_relay(tp->srcfd, tp->dstfd, service);
+					break;
+				}
+#if 0
+				FD_SET(tp->srcfd, &exceptfds);
+#endif
+			}
+			if (FD_ISSET(tp->dstfd, &readfds)) {
+				fprintf(stderr, "p");
+				switch (100) {
+				default:
+					tcp_relay(tp->dstfd, tp->srcfd, service);
 					break;
 				}
 #if 0
@@ -570,9 +571,9 @@ play_child(int s_src, struct sockaddr *srcaddr)
 		exit_stderr("fcntl: %s", strerror(errno));;
 	if (fcntl(s_src, F_SETFL, O_NONBLOCK) == -1)
 		exit_stderr("fcntl: %s", strerror(errno));;
-
 	error = connect(s_dst, sa4, sa4->sa_len);
 	new->active = 1;
+	fprintf(stderr, "connect: srcfd=%d, dstfd=%d\n",s_src ,s_dst);
 #if 0
 	if (error < 0) {
 		exit_failure("connect: %s", strerror(errno));

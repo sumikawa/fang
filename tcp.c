@@ -113,8 +113,8 @@ notify_inactive()
 			(FAITH_TIMEOUT < t - child_lastactive) ? "in" : "");
 	}
 
-	if (FAITH_TIMEOUT < t - child_lastactive
-	 && FAITH_TIMEOUT < t - parent_lastactive) {
+	if (FAITH_TIMEOUT < t - child_lastactive &&
+	    FAITH_TIMEOUT < t - parent_lastactive) {
 		/* both side timeouted */
 		signal(SIGCHLD, SIG_DFL);
 		kill(cpid, SIGTERM);
@@ -204,30 +204,30 @@ tcp_relay(int s_rcv, int s_snd, const char *service)
 			}
 		}
 	}
-	if (FD_ISSET(s_rcv, &readfds)) {
-	relaydata_read_retry:
-		tblen = read(s_rcv, tcpbuf, sizeof(tcpbuf));
-		tboff = 0;
-		switch (tblen) {
-		case -1:
-			if (errno == EINTR)
-				goto relaydata_read_retry;
-			exit_failure("reading relay data failed: %s",
-				     strerror(errno));
-			/* NOTREACHED */
-		case 0:
-			/* to close opposite-direction relay process */
-			shutdown(s_snd, 0);
 
-			close(s_rcv);
-			close(s_snd);
-			exit_success("terminating %s relay", service);
-			/* NOTREACHED */
-		default:
-			FD_CLR(s_rcv, &readfds);
-			FD_SET(s_snd, &writefds);
-			break;
-		}
+ relaydata_read_retry:
+	tblen = read(s_rcv, tcpbuf, sizeof(tcpbuf));
+	tboff = 0;
+	switch (tblen) {
+	case -1:
+		if (errno == EINTR)
+			goto relaydata_read_retry;
+		exit_failure("reading relay data failed: %s",
+			     strerror(errno));
+		/* NOTREACHED */
+	case 0:
+		/* to close opposite-direction relay process */
+		shutdown(s_snd, 0);
+
+		close(s_rcv);
+		close(s_snd);
+		exit_success("terminating %s relay", service);
+		/* NOTREACHED */
+	default:
+		fprintf(stderr, " tblen=%d\n", tblen);
+		FD_CLR(s_rcv, &readfds);
+		FD_SET(s_snd, &writefds);
+		break;
 	}
 	if (FD_ISSET(s_snd, &writefds))
 		send_data(s_rcv, s_snd, service);

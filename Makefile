@@ -21,12 +21,13 @@ PROG=	fang
 SRCS=	fang.c tcp.c prefix.c
 #SRCS=	fang.c tcp.c ftp.c rsh.c prefix.c
 
+CFLAGS+= -g
 #CFLAGS+= -DFAITH4
 
 #.if (${OPSYS} != "NetBSD")
 #CFLAGS+= -Wall
 #.endif
-LDADD+=	-lutil
+LDADD+=	-lutil -g
 DPADD+=	${LIBUTIL}
 .if exists(/usr/local/v6/lib/libinet6.a)
 LDADD+=	-L${.OBJDIR}/../libinet6 -L${.OBJDIR}/../libinet6/obj \
