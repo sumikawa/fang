@@ -21,7 +21,7 @@ PROG=	fang
 SRCS=	fang.c tcp.c prefix.c
 #SRCS=	fang.c tcp.c ftp.c rsh.c prefix.c
 
-CFLAGS+= -g
+CFLAGS+= -g -Wall
 #CFLAGS+= -DFAITH4
 
 #.if (${OPSYS} != "NetBSD")

@@ -66,7 +66,6 @@ static void sig_child __P((int));
 static void notify_inactive __P((void));
 static void notify_active __P((void));
 static void send_data __P((int, int, struct transtab *));
-static void relay __P((int, int, const char *, int));
 
 /*
  * Inactivity timer:
@@ -168,11 +167,11 @@ send_data(int s_rcv, int s_snd, struct transtab *service)
 }
 
 int
-tcp_relay(int s_rcv, int s_snd, struct transtab *tp)
+tcp_relay(int s_rcv, int s_snd, struct transtab *tp, int exceptional)
 {
-	int atmark, error, maxfd;
+	int atmark, error;
 
-	if (FD_ISSET(s_rcv, &exceptfds)) {
+	if (exceptional) {
 		error = ioctl(s_rcv, SIOCATMARK, &atmark);
 		if (error != -1 && atmark == 1) {
 			int cc;
@@ -190,41 +189,43 @@ tcp_relay(int s_rcv, int s_snd, struct transtab *tp)
 					     strerror(errno));
 			}
 		}
-	}
-
- relaydata_read_retry:
-	tblen = read(s_rcv, tcpbuf, sizeof(tcpbuf));
-	tboff = 0;
-	switch (tblen) {
-	case -1:
-		if (errno == EINTR)
-			goto relaydata_read_retry;
-		exit_failure("reading relay data failed: %s",
-			     strerror(errno));
-		/* NOTREACHED */
-	case 0:
-		/* to close opposite-direction relay process */
-		shutdown(s_snd, 0);
-		close(s_rcv);
-		close(s_snd);
+	} else {
+	relaydata_read_retry:
+		tblen = read(s_rcv, tcpbuf, sizeof(tcpbuf));
+		tboff = 0;
+		switch (tblen) {
+		case -1:
+			/* xxx */
+			if (errno == EINTR)
+				goto relaydata_read_retry;
+			/* xxx */
+			exit_failure("reading relay data failed: %s",
+				     strerror(errno));
+			/* NOTREACHED */
+		case 0:
+			/* to close opposite-direction relay process */
+			shutdown(s_snd, 0);
+			close(s_rcv);
+			close(s_snd);
 #if 0
-		fprintf(stderr, "inactive\n");
+			fprintf(stderr, "inactive\n");
 #endif
-		if (tp->next)
-			tp->next->prev = tp->prev;
-		if (tp->prev)
-			tp->prev->next = tp->next;
-		else
-			transtab = tp->next;
-		free(tp);
-		return (-1);
-	default:
+			if (tp->next)
+				tp->next->prev = tp->prev;
+			if (tp->prev)
+				tp->prev->next = tp->next;
+			else
+				transtab = tp->next;
+			free(tp);
+			return (-1);
+		default:
 #if 0
-		fprintf(stderr, " tblen=%d\n", tblen);
+			fprintf(stderr, " tblen=%d\n", tblen);
 #endif
-		FD_CLR(s_rcv, &readfds);
-		FD_SET(s_snd, &writefds);
-		break;
+			FD_CLR(s_rcv, &readfds);
+			FD_SET(s_snd, &writefds);
+			break;
+		}
 	}
 	if (FD_ISSET(s_snd, &writefds))
 		send_data(s_rcv, s_snd, tp);

@@ -301,7 +301,6 @@ play_service(int s_wld)
 	struct sockaddr_storage srcaddr;
 	int len;
 	int s_src;
-	pid_t child_pid;
 	fd_set oreadfds, owritefds, oexceptfds;
 	int error;
 	int maxfd;
@@ -367,8 +366,6 @@ play_service(int s_wld)
 	}
 #endif
 	if (FD_ISSET(s_wld, &readfds)) {
-		int i;
-
 		/* xxx: should do accept() repeat until queue is null? */
 		len = sizeof(srcaddr);
 		s_src = accept(s_wld, (struct sockaddr *)&srcaddr,
@@ -382,46 +379,36 @@ play_service(int s_wld)
 
 	next = NULL;
 	for (tp = transtab; tp != NULL; tp = next) {
+		int src = 0, dst = 0, exceptional = 0;
+
 		/* xxx TODO: fairness for each connection */
 		next = tp->next;
 		if (tp->active) {
 			if (FD_ISSET(tp->srcfd, &exceptfds)) {
 				fprintf(stderr, "e");
-#if 0
-				switch (tp->port) {
-				default:
-					if (tcp_relay(tp->srcfd, tp->dstfd, tp) != 0)
-						continue;
-					break;
-				}
-#endif
-			}
-			if (FD_ISSET(tp->srcfd, &readfds)) {
-				switch (tp->port) {
-				default:
-					if (tcp_relay(tp->srcfd, tp->dstfd, tp) != 0)
-						continue;
-					break;
-				}
+				exceptional = 1;
+				src = tp->srcfd;
+				dst = tp->dstfd;
 			}
 			if (FD_ISSET(tp->dstfd, &exceptfds)) {
 				fprintf(stderr, "f");
-#if 0
-				switch (tp->port) {
-				default:
-					if (tcp_relay(tp->dstfd, tp->srcfd, tp) != 0)
-						continue;
-					break;
-				}
-#endif
+				exceptional = 1;
+				src = tp->dstfd;
+				dst = tp->srcfd;
 			}
-			if (FD_ISSET(tp->dstfd, &readfds)) {
-				switch (tp->port) {
-				default:
-					if (tcp_relay(tp->dstfd, tp->srcfd, tp) != 0)
-						continue;
-					break;
-				}
+			if (FD_ISSET(tp->srcfd, &readfds)) {
+				src = tp->srcfd;
+				dst = tp->dstfd;
+			}
+			if (FD_ISSET(tp->dstfd, &exceptfds)) {
+				src = tp->dstfd;
+				dst = tp->srcfd;
+			}
+			switch (tp->port) {
+			default:
+				if (tcp_relay(src, dst, tp, exceptional) != 0)
+					continue;
+				break;
 			}
 		}
 	}
@@ -439,7 +426,6 @@ play_child(int s_src, struct sockaddr *srcaddr)
 	char dport[NI_MAXSERV];
 	int len = sizeof(dstaddr6);
 	int s_dst, error, nresvport, on = 1;
-	struct timeval tv;
 	struct sockaddr *sa4;
 	const struct config *conf;
 	struct transtab *new;

@@ -1,6 +1,7 @@
 - 書き込み側blockしちゃったよモードの作成
 - accept()をqueueが空になるまで繰り返すべきかどうか
 - fairness
+  たぶん、transtabをリングにして、順に先頭をずらせばいい
 - connect()の後ってほっとけばいいのか、exceptfdsを見てからactiveにするのか？
 - multi port listen
 - 層違反プロトコルの柔軟なサポート(設定ファイルベース)
