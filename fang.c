@@ -324,6 +324,8 @@ play_service(int s_wld)
 		if (tp->active) {
 			FD_SET(tp->srcfd, &readfds);
 			FD_SET(tp->srcfd, &exceptfds);
+			FD_SET(tp->dstfd, &readfds);
+			FD_SET(tp->dstfd, &exceptfds);
 		}
 	}
 	maxfd = getdtablesize();
@@ -524,9 +526,9 @@ play_child(int s_src, struct sockaddr *srcaddr)
 	memset(new, 0, sizeof(*new));
 	new->next = transtab;
 	transtab = new;
-	memcpy(srcaddr, &new->srcaddr, sizeof(struct sockaddr_storage));
+	memcpy(&new->srcaddr, srcaddr, sizeof(struct sockaddr_storage));
 	new->srcfd = s_src;
-	memcpy(&dstaddr4, &new->dstaddr, sizeof(struct sockaddr_storage));
+	memcpy(&new->dstaddr, &dstaddr4, sizeof(struct sockaddr_storage));
 
 	if (sa4->sa_family == AF_INET6)
 		hport = ntohs(((struct sockaddr_in6 *)&dstaddr4)->sin6_port);
@@ -564,27 +566,19 @@ play_child(int s_src, struct sockaddr *srcaddr)
 		exit_failure("setsockopt(SO_OOBINLINE): %s", strerror(errno));
 		/*NOTREACHED*/
 	}
-
-	error = setsockopt(s_src, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-	if (error < 0) {
-		exit_failure("setsockopt(SO_SNDTIMEO): %s", strerror(errno));
-		/*NOTREACHED*/
-	}
-	error = setsockopt(s_dst, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-	if (error < 0) {
-		exit_failure("setsockopt(SO_SNDTIMEO): %s", strerror(errno));
-		/*NOTREACHED*/
-	}
 	if (fcntl(s_dst, F_SETFL, O_NONBLOCK) == -1)
 		exit_stderr("fcntl: %s", strerror(errno));;
 	if (fcntl(s_src, F_SETFL, O_NONBLOCK) == -1)
 		exit_stderr("fcntl: %s", strerror(errno));;
 
 	error = connect(s_dst, sa4, sa4->sa_len);
+	new->active = 1;
+#if 0
 	if (error < 0) {
 		exit_failure("connect: %s", strerror(errno));
 		/*NOTREACHED*/
 	}
+#endif
 	/* NOTREACHED */
 }
 
