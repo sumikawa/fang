@@ -1,4 +1,4 @@
-.\"	$KAME: faithd.8,v 1.33 2001/09/05 03:04:20 itojun Exp $
+.\"	$KAME: fangd.8,v 1.33 2001/09/05 03:04:20 itojun Exp $
 .\"
 .\" Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
 .\" All rights reserved.
@@ -28,11 +28,11 @@
 .\" SUCH DAMAGE.
 .\"
 .Dd May 17, 1998
-.Dt FAITHD 8
+.Dt FANG 8
 .Os KAME
 .Sh NAME
-.Nm faithd
-.Nd FAITH IPv6/v4 translator daemon
+.Nm fang
+.Nd FAith Next Generation: IPv6/v4 translator daemon
 .Sh SYNOPSIS
 .Nm
 .Op Fl dp
@@ -78,7 +78,7 @@ translation service,
 an IPv6 address prefix must be reserved for mapping IPv4 addresses into.
 Kernel must be properly configured to route all the TCP connection
 toward the reserved IPv6 address prefix into the
-.Xr faith 4
+.Xr faing 4
 pseudo interface, by using
 .Xr route 8
 command.
@@ -200,44 +200,12 @@ Inactive sessions will be disconnected in 30 minutes,
 to avoid stale sessions from chewing up resources.
 This may be inappropriate for some of the services
 .Pq should this be configurable? .
-.Ss inetd mode
-NOTE: The mode is available on KAME/NetBSD and KAME/BSDI3 only.
-.Pp
-When
-.Nm
-is invoked via
-.Xr inetd 8 ,
-.Nm
-will handle connection passed from standard input.
-If the connection endpoint is in the reserved IPv6 address prefix,
-.Nm
-will relay the connection.
-Otherwise,
-.Nm
-will invoke service-specific daemon like
-.Xr telnetd 8 ,
-by using the command argument passed from
-.Xr inetd 8 .
-.Pp
-.Nm
-determines operation mode by the local TCP port number,
-and enables special protocol handling whenever necessary/possible.
-For example, if
-.Nm
-is invoked via
-.Xr inetd 8
-on FTP port, it will operate as a FTP relay.
-.Pp
-The operation mode requires special support for
-.Nm
-in
-.Xr inetd 8 .
 .Ss Access control
 To prevent malicious accesses,
 .Nm
 implements a simple address-based access control.
 With
-.Pa /etc/faithd.conf
+.Pa /etc/fang.conf
 .Po
 or
 .Ar configfile
@@ -247,7 +215,7 @@ specified by
 .Nm
 will avoid relaying unwanted traffic.
 The
-.Pa faithd.conf
+.Pa fang.conf
 contains directives with the following format:
 .Bl -bullet
 .It
@@ -277,10 +245,6 @@ and the first matching entry will be effective.
 If there is no match
 .Pq if we reach the end of the ruleset
 the traffic will be denied.
-.Pp
-With inetd mode,
-traffic may be filtered by using access control functionality in 
-.Xr inetd 8 .
 .Sh EXAMPLES
 Before invoking
 .Nm Ns ,
@@ -301,7 +265,7 @@ service, and provide no local telnet service, invoke
 .Nm
 as follows:
 .Bd -literal -offset
-# faithd telnet
+# fang telnet
 .Ed
 .Pp
 If you would like to provide local telnet service via
@@ -310,12 +274,12 @@ on
 .Pa /usr/libexec/telnetd ,
 use the following command line:
 .Bd -literal -offset
-# faithd telnet /usr/libexec/telnetd telnetd
+# fang telnet /usr/libexec/telnetd telnetd
 .Ed
 .Pp
 If you would like to pass extra arguments to the local daemon:
 .Bd -literal -offset
-# faithd ftp /usr/libexec/ftpd ftpd -l
+# fang ftp /usr/libexec/ftpd ftpd -l
 .Ed
 .Pp
 Here are some other examples.
@@ -323,9 +287,9 @@ You may need
 .Fl p
 to translate rsh/rlogin services.
 .Bd -literal -offset
-# faithd ssh
-# faithd login /usr/libexec/rlogin rlogind
-# faithd shell /usr/libexec/rshd rshd
+# fang ssh
+# fang login /usr/libexec/rlogin rlogind
+# fang shell /usr/libexec/rshd rshd
 .Ed
 .Pp
 However, you should be careful when translating rlogin or rsh
@@ -333,33 +297,9 @@ connections.
 See
 .Sx SECURITY CONSIDERATIONS
 for more details.
-.Ss inetd mode samples
-Add the following lines into
-.Xr inetd.conf 5 .
-Syntax may vary depending upon your operating system.
-.\" FREEBSD MERGE NOTE: freebsd43 uses "tcp6/faith", not "faith/tcp6"!
-.Bd -literal -offset
-telnet  stream  faith/tcp6  nowait  root  faithd  telnetd
-ftp     stream  faith/tcp6  nowait  root  faithd  ftpd -l
-ssh     stream  faith/tcp6  nowait  root  faithd  /usr/pkg/sbin/sshd -i
-.Ed
-.Pp
-.Xr inetd 8
-will open listening sockets with enabling kernel TCP relay support.
-Whenever connection comes in,
-.Nm
-will be invoked by
-.Xr inetd 8 .
-If it the connection endpoint is in the reserved IPv6 address prefix.
-.Nm
-will relay the connection.
-Otherwise,
-.Nm
-will invoke service-specific daemon like
-.Xr telnetd 8 .
 .Ss Access control samples
 The following illustrates a simple
-.Pa faithd.conf
+.Pa fang.conf
 setting.
 .Bd -literal -offset
 # permit anyone from 3ffe:501:ffff::/48 to use the translator,
@@ -396,7 +336,7 @@ on error.
 .Sh HISTORY
 The
 .Nm
-command first appeared in WIDE Hydrangea IPv6 protocol stack kit.
+command first appeared in KAME IPv6 protocol stack kit.
 .\"
 .Sh SECURITY CONSIDERATIONS
 It is very insecure to use
@@ -408,7 +348,7 @@ and any other TCP relaying services.
 Administrators are advised to limit accesses to
 .Nm
 using
-.Pa faithd.conf ,
+.Pa fang.conf ,
 or by using IPv6 packet filters.
 It is to protect
 .Nm
