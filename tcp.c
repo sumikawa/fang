@@ -65,7 +65,7 @@ static void sig_ctimeout __P((int));
 static void sig_child __P((int));
 static void notify_inactive __P((void));
 static void notify_active __P((void));
-static void send_data __P((int, int, const char *));
+static void send_data __P((int, int, struct transtab *));
 static void relay __P((int, int, const char *, int));
 
 /*
@@ -145,7 +145,7 @@ notify_active()
 }
 
 static void
-send_data(int s_rcv, int s_snd, const char *service)
+send_data(int s_rcv, int s_snd, struct transtab *service)
 {
 	int cc;
 
@@ -181,7 +181,7 @@ send_data(int s_rcv, int s_snd, const char *service)
 }
 
 void
-tcp_relay(int s_rcv, int s_snd, const char *service)
+tcp_relay(int s_rcv, int s_snd, struct transtab *tp)
 {
 	int atmark, error, maxfd;
 
@@ -218,11 +218,23 @@ tcp_relay(int s_rcv, int s_snd, const char *service)
 	case 0:
 		/* to close opposite-direction relay process */
 		shutdown(s_snd, 0);
-
 		close(s_rcv);
 		close(s_snd);
-		exit_success("terminating %s relay", service);
-		/* NOTREACHED */
+#if 0
+		FD_CLR(s_rcv, &readfds);
+		FD_CLR(s_snd, &readfds);
+		FD_CLR(s_rcv, &exceptfds);
+		FD_CLR(s_snd, &exceptfds);
+#endif
+		fprintf(stderr, "inactive\n");
+		if (tp->next)
+			tp->next->prev = tp->prev;
+		if (tp->prev)
+			tp->prev->next = tp->next;
+		else
+			transtab = tp->next;
+		free(tp);
+		return;
 	default:
 		fprintf(stderr, " tblen=%d\n", tblen);
 		FD_CLR(s_rcv, &readfds);
@@ -230,5 +242,5 @@ tcp_relay(int s_rcv, int s_snd, const char *service)
 		break;
 	}
 	if (FD_ISSET(s_snd, &writefds))
-		send_data(s_rcv, s_snd, service);
+		send_data(s_rcv, s_snd, tp);
 }

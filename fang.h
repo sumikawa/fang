@@ -32,17 +32,6 @@
 extern char logname[];
 extern int dflag;
 
-extern void tcp_relay __P((int, int, const char *));
-extern void ftp_relay __P((int, int));
-extern int ftp_active __P((int, int, int *, int *));
-extern int ftp_passive __P((int, int, int *, int *));
-extern void rsh_relay __P((int, int));
-extern void rsh_dual_relay __P((int, int));
-extern void exit_success __P((const char *, ...))
-	__attribute__((__format__(__printf__, 1, 2)));
-extern void exit_failure __P((const char *, ...))
-	__attribute__((__format__(__printf__, 1, 2)));
-
 #define DEFAULT_PORT_NAME	"telnet"
 #define DEFAULT_DIR	"/usr/libexec"
 #define DEFAULT_NAME	"telnetd"
@@ -73,6 +62,7 @@ extern void exit_failure __P((const char *, ...))
 #define MAX_CONNECTION	256
 
 struct transtab {
+	struct transtab *prev;
 	struct transtab *next;
 	struct sockaddr_storage srcaddr;
 	struct sockaddr_storage dstaddr;
@@ -83,3 +73,14 @@ struct transtab {
 };
 extern struct transtab *transtab;
 extern fd_set readfds, writefds, exceptfds;
+
+extern void tcp_relay __P((int, int, struct transtab *));
+extern void ftp_relay __P((int, int));
+extern int ftp_active __P((int, int, int *, int *));
+extern int ftp_passive __P((int, int, int *, int *));
+extern void rsh_relay __P((int, int));
+extern void rsh_dual_relay __P((int, int));
+extern void exit_success __P((const char *, ...))
+	__attribute__((__format__(__printf__, 1, 2)));
+extern void exit_failure __P((const char *, ...))
+	__attribute__((__format__(__printf__, 1, 2)));

@@ -2,6 +2,8 @@
 - accept()をqueueが空になるまで繰り返すべきかどうか
 - fairness
 - connect()の後ってほっとけばいいのか、exceptfdsを見てからactiveにするのか？
+- multi port listen
+- 層違反プロトコルの柔軟なサポート(設定ファイルベース)
 
 -----------------------------
 onoeさんのメール

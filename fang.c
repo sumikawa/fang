@@ -304,28 +304,26 @@ play_service(int s_wld)
 	int error;
 	int maxfd;
 	struct timeval tv;
-	struct transtab *tp;
+	struct transtab *tp, *next;
 
 	/*
 	 * Wait, accept, fork, faith....
 	 */
 	setproctitle("%s", procname);
 
+	oreadfds = readfds; owritefds = writefds; oexceptfds = exceptfds;
+ again:
 	FD_ZERO(&readfds);
 	FD_ZERO(&writefds);
 	FD_ZERO(&exceptfds);
-	oreadfds = readfds; owritefds = writefds; oexceptfds = exceptfds;
- again:
 	tv.tv_sec = 1; /* one second */
 	tv.tv_usec = 0;
 
 	FD_SET(s_wld, &readfds);
 	for (tp = transtab; tp != NULL; tp = tp->next) {
 		if (tp->active) {
-#if 0
 			fprintf(stderr, "fd_set: srcfd=%d, dstfd=%d\n", tp->srcfd,
 				tp->dstfd);
-#endif
 			FD_SET(tp->srcfd, &readfds);
 			FD_SET(tp->srcfd, &exceptfds);
 			FD_SET(tp->dstfd, &readfds);
@@ -345,6 +343,8 @@ play_service(int s_wld)
 	}
 #endif
 
+	fprintf(stderr, "select readfds=%o\n", readfds);
+	fflush(stderr);
 	error = select(maxfd + 1, &readfds, &writefds, &exceptfds, &tv);
 	if (error < 0) {
 		if (errno == EINTR)
@@ -374,25 +374,35 @@ play_service(int s_wld)
 		play_child(s_src, (struct sockaddr *)&srcaddr);
 	}
 
-	for (tp = transtab; tp != NULL; tp = tp->next) {
+	next = NULL;
+	for (tp = transtab; tp != NULL; tp = next) {
+		next = tp->next;
 		if (tp->active) {
 			/* xxx TODO: fairness */
 			if (FD_ISSET(tp->srcfd, &readfds)) {
 				fprintf(stderr, "g");
 				switch (100) {
 				default:
-					tcp_relay(tp->srcfd, tp->dstfd, service);
+					tcp_relay(tp->srcfd, tp->dstfd, tp);
 					break;
 				}
+			}
+			/* garbage exitst */
+			if (FD_ISSET(tp->srcfd, &exceptfds)) {
+				fprintf(stderr, "e");
 #if 0
-				FD_SET(tp->srcfd, &exceptfds);
+				switch (100) {
+				default:
+					tcp_relay(tp->srcfd, tp->dstfd, tp);
+					break;
+				}
 #endif
 			}
 			if (FD_ISSET(tp->dstfd, &readfds)) {
 				fprintf(stderr, "p");
 				switch (100) {
 				default:
-					tcp_relay(tp->dstfd, tp->srcfd, service);
+					tcp_relay(tp->dstfd, tp->srcfd, tp);
 					break;
 				}
 #if 0
@@ -526,7 +536,10 @@ play_child(int s_src, struct sockaddr *srcaddr)
 	new = (struct transtab *)malloc(sizeof(struct transtab));
 	memset(new, 0, sizeof(*new));
 	new->next = transtab;
+	if (new->next)
+		new->next->prev = new;
 	transtab = new;
+
 	memcpy(&new->srcaddr, srcaddr, sizeof(struct sockaddr_storage));
 	new->srcfd = s_src;
 	memcpy(&new->dstaddr, &dstaddr4, sizeof(struct sockaddr_storage));
