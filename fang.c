@@ -345,7 +345,7 @@ play_service(int s_wld)
 	}
 #endif
 
-	fprintf(stderr, "select readfds=%o\n", readfds);
+	fprintf(stderr, "select readfds = %o\n", readfds);
 	fflush(stderr);
 	error = select(maxfd + 1, &readfds, &writefds, &exceptfds, &tv);
 	if (error < 0) {
@@ -378,38 +378,37 @@ play_service(int s_wld)
 
 	next = NULL;
 	for (tp = transtab; tp != NULL; tp = next) {
+		/* xxx TODO: fairness for each connection */
 		next = tp->next;
 		if (tp->active) {
-			/* xxx TODO: fairness */
-			if (FD_ISSET(tp->srcfd, &readfds)) {
-				fprintf(stderr, "g");
-				switch (100) {
-				default:
-					tcp_relay(tp->srcfd, tp->dstfd, tp);
-					break;
-				}
-			}
-			/* garbage exitst */
 			if (FD_ISSET(tp->srcfd, &exceptfds)) {
 				fprintf(stderr, "e");
 #if 0
-				switch (100) {
+				switch (tp->port) {
 				default:
-					tcp_relay(tp->srcfd, tp->dstfd, tp);
+					if (tcp_relay(tp->srcfd, tp->dstfd, tp) != 0)
+						continue
 					break;
 				}
 #endif
 			}
-			if (FD_ISSET(tp->dstfd, &readfds)) {
-				fprintf(stderr, "p");
-				switch (100) {
+			if (FD_ISSET(tp->srcfd, &readfds)) {
+				fprintf(stderr, "g");
+				switch (tp->port) {
 				default:
-					tcp_relay(tp->dstfd, tp->srcfd, tp);
+					if (tcp_relay(tp->srcfd, tp->dstfd, tp) != 0)
+						continue;
 					break;
 				}
-#if 0
-				FD_SET(tp->srcfd, &exceptfds);
-#endif
+			}
+			if (FD_ISSET(tp->dstfd, &readfds)) {
+				fprintf(stderr, "p");
+				switch (tp->port) {
+				default:
+					if (tcp_relay(tp->dstfd, tp->srcfd, tp) != 0)
+						continue;
+					break;
+				}
 			}
 		}
 	}
@@ -426,7 +425,7 @@ play_child(int s_src, struct sockaddr *srcaddr)
 	char dst4[NI_MAXHOST];
 	char dport[NI_MAXSERV];
 	int len = sizeof(dstaddr6);
-	int s_dst, error, hport, nresvport, on = 1;
+	int s_dst, error, nresvport, on = 1;
 	struct timeval tv;
 	struct sockaddr *sa4;
 	const struct config *conf;
@@ -545,13 +544,12 @@ play_child(int s_src, struct sockaddr *srcaddr)
 	memcpy(&new->srcaddr, srcaddr, sizeof(struct sockaddr_storage));
 	new->srcfd = s_src;
 	memcpy(&new->dstaddr, &dstaddr4, sizeof(struct sockaddr_storage));
-
 	if (sa4->sa_family == AF_INET6)
-		hport = ntohs(((struct sockaddr_in6 *)&dstaddr4)->sin6_port);
+		new->port = ntohs(((struct sockaddr_in6 *)&dstaddr4)->sin6_port);
 	else /* AF_INET */
-		hport = ntohs(((struct sockaddr_in *)&dstaddr4)->sin_port);
+		new->port = ntohs(((struct sockaddr_in *)&dstaddr4)->sin_port);
 
-	switch (hport) {
+	switch (new->port) {
 	case RLOGIN_PORT:
 	case RSH_PORT:
 		s_dst = rresvport_af(&nresvport, sa4->sa_family);
