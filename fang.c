@@ -97,7 +97,7 @@ static const char *service;
 #ifdef USE_ROUTE
 static int sockfd = 0;
 #endif
-int dflag = 0;
+int dflag = 0, Dflag = 0;
 struct transtab *transtab = NULL;
 fd_set readfds, writefds, exceptfds;
 
@@ -134,8 +134,11 @@ main(int argc, char **argv)
 	char *ns;
 #endif /* FAITH_NS */
 
-	while ((c = getopt(argc, argv, "df:p46")) != -1) {
+	while ((c = getopt(argc, argv, "Ddf:p46")) != -1) {
 		switch (c) {
+		case 'D':
+			Dflag++;
+			break;
 		case 'd':
 			dflag++;
 			break;
@@ -280,9 +283,8 @@ main(int argc, char **argv)
 	 * Everything is OK.
 	 */
 
-#if 0
-	start_daemon();
-#endif
+	if (Dflag == 0)
+		start_daemon();
 	snprintf(logname, sizeof(logname), "faithd %s", service);
 	snprintf(procname, sizeof(procname), "accepting port %s", service);
 	openlog(logname, LOG_PID | LOG_NOWAIT, LOG_DAEMON);
