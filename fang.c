@@ -358,10 +358,8 @@ play_service(int s_wld)
 		exit_failure("select: %s", strerror(errno));
 		/*NOTREACHED*/
 	}
-	if (error == 0) {
-		fprintf(stderr, "s");
+	if (error == 0)
 		goto again; /* time out */
-	}
 
 #ifdef USE_ROUTE
 	if (FD_ISSET(sockfd, &readfds)) {
@@ -399,7 +397,6 @@ play_service(int s_wld)
 #endif
 			}
 			if (FD_ISSET(tp->srcfd, &readfds)) {
-				fprintf(stderr, "g");
 				switch (tp->port) {
 				default:
 					if (tcp_relay(tp->srcfd, tp->dstfd, tp) != 0)
@@ -407,8 +404,18 @@ play_service(int s_wld)
 					break;
 				}
 			}
+			if (FD_ISSET(tp->dstfd, &exceptfds)) {
+				fprintf(stderr, "f");
+#if 0
+				switch (tp->port) {
+				default:
+					if (tcp_relay(tp->dstfd, tp->srcfd, tp) != 0)
+						continue;
+					break;
+				}
+#endif
+			}
 			if (FD_ISSET(tp->dstfd, &readfds)) {
-				fprintf(stderr, "p");
 				switch (tp->port) {
 				default:
 					if (tcp_relay(tp->dstfd, tp->srcfd, tp) != 0)
